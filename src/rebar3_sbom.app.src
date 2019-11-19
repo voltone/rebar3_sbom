@@ -1,0 +1,15 @@
+{application, rebar3_sbom,
+ [{description, "Rebar3 plugin to generate CycloneDX SBoM"},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications,
+   [kernel,
+    stdlib
+   ]},
+  {env,[]},
+  {modules, []},
+
+  {maintainers, []},
+  {licenses, ["BSD-3-Clause"]},
+  {links, []}
+ ]}.
