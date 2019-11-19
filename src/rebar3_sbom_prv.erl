@@ -99,5 +99,7 @@ write_file(Filename, Xml, false) ->
                 "y\n" -> write_file(Filename, Xml, true);
                 "Y\n" -> write_file(Filename, Xml, true);
                 _ -> {error, "Aborted"}
-            end
+            end;
+        Error ->
+            Error
     end.

@@ -19,7 +19,6 @@ Add the plugin to your rebar config, either in a project or globally in
 Then just call your plugin directly in an existing application:
 
 
-    $ rebar3 rebar3_sbom
-    ===> Fetching rebar3_sbom
-    ===> Compiling rebar3_sbom
-    <Plugin Output>
+    $ rebar3 sbom
+    ===> Verifying dependencies...
+    ===> CycloneDX SBoM written to bom.xml
