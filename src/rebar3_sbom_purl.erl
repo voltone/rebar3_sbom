@@ -8,27 +8,27 @@ hex(Name, Version) ->
     purl(["hex", string:lowercase(Name)], Version).
 
 git(_Name, "git@github.com:" ++ Github, Ref) ->
-    [Repo, _, _] = string:replace(Github, ".git", "", trailing),
+    Repo = string:replace(Github, ".git", "", trailing),
     github(Repo, Ref);
 
 git(_Name, "https://github.com/" ++ Github, Ref) ->
-    [Repo, _, _] = string:replace(Github, ".git", "", trailing),
+    Repo = string:replace(Github, ".git", "", trailing),
     github(Repo, Ref);
 
 git(_Name, "git://github.com/" ++ Github, Ref) ->
-    [Repo, _, _] = string:replace(Github, ".git", "", trailing),
+    Repo = string:replace(Github, ".git", "", trailing),
     github(Repo, Ref);
 
 git(_Name, "git@bitbucket.org:" ++ Github, Ref) ->
-    [Repo, _, _] = string:replace(Github, ".git", "", trailing),
+    Repo = string:replace(Github, ".git", "", trailing),
     bitbucket(Repo, Ref);
 
 git(_Name, "https://bitbucket.org/" ++ Github, Ref) ->
-    [Repo, _, _] = string:replace(Github, ".git", "", trailing),
+    Repo = string:replace(Github, ".git", "", trailing),
     bitbucket(Repo, Ref);
 
 git(_Name, "git://bitbucket.org/" ++ Github, Ref) ->
-    [Repo, _, _] = string:replace(Github, ".git", "", trailing),
+    Repo = string:replace(Github, ".git", "", trailing),
     bitbucket(Repo, Ref);
 
 %% Git dependence other than GitHub and BitBucket are not currently supported
