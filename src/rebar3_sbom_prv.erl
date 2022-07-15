@@ -65,6 +65,16 @@ dep_info(_Name, _Version, {pkg, Name, Version, Sha256}, _Dir, Details) ->
         {sha256, string:lowercase(Sha256)}
     ];
 
+dep_info(_Name, _Version, {pkg, Name, Version, _InnerChecksum, OuterChecksum, _RepoConfig}, _Dir, Details) ->
+    [
+        {name, Name},
+        {version, Version},
+        {description, proplists:get_value(description, Details)},
+        {licenses, proplists:get_value(licenses, Details)},
+        {purl, rebar3_sbom_purl:hex(Name, Version)},
+        {sha256, string:lowercase(OuterChecksum)}
+    ];
+
 dep_info(Name, _Version, {git, Git, {tag, Tag}}, _Dir, Details) ->
     [
         {name, Name},
