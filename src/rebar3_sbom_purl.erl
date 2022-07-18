@@ -44,5 +44,5 @@ bitbucket(Repo, Ref) ->
     purl(["bitbucket", string:lowercase(Organization), string:lowercase(Name)], Ref).
 
 purl(PathSegments, Version) ->
-    Path = lists:join("/", [http_uri:encode(Segment) || Segment <- PathSegments]),
-    io_lib:format("pkg:~s@~s", [Path, http_uri:encode(Version)]).
+    Path = lists:join("/", [uri_string:quote(Segment) || Segment <- PathSegments]),
+    io_lib:format("pkg:~s@~s", [Path, uri_string:quote(Version)]).
