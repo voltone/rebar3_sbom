@@ -44,5 +44,17 @@ bitbucket(Repo, Ref) ->
     purl(["bitbucket", string:lowercase(Organization), string:lowercase(Name)], Ref).
 
 purl(PathSegments, Version) ->
-    Path = lists:join("/", [uri_string:quote(Segment) || Segment <- PathSegments]),
-    io_lib:format("pkg:~s@~s", [Path, uri_string:quote(Version)]).
+    Path = lists:join("/", [escape(Segment) || Segment <- PathSegments]),
+    io_lib:format("pkg:~s@~s", [Path, escape(Version)]).
+
+-if(?OTP_RELEASE >= 25).
+
+escape(String) ->
+    uri_string:quote(String).
+
+-else.
+
+escape(String) ->
+    http_uri:encode(String).
+
+-endif.
