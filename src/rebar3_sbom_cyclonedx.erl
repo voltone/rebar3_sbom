@@ -104,24 +104,11 @@ is_bom_equal(#xmlElement{content = A}, #xmlElement{content = B}) ->
                           {false, _} -> false;
                           {_, false} -> false;
                           {_, _} ->
-                              SA = xmerl_lib:simplify_element(ValA),
-                              SB =    xmerl_lib:simplify_element(ValB),
-                              case SA == SB of
-                                  false ->
-                                      write_file("sa.txt", SA),
-                                      write_file("sb.txt", SB);
-                                  _ ->
-                                      ok
-                              end,
-                              SA == SB
-
+                              xmerl_lib:simplify_element(ValA) =:=
+                                  xmerl_lib:simplify_element(ValB)
                       end
               end,
-              [components, dependencies]).
-
-write_file(Filename, X) ->
-    C = io_lib:format("~p", [X]),
-    file:write_file(Filename, C).
+              [components]).
 
 dependency(Component) ->
     Ref = bom_ref_of_component(Component),
