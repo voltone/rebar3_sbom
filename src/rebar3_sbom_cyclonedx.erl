@@ -35,6 +35,7 @@ component(Component) ->
             lists:member(Field, ?COMPONENT_FIELDS), Value /= undefined, Value /= []]}.
 
 component_field(name, Name) -> {name, [], [[Name]]};
+component_field(version, Version) when is_atom(Version) -> {version, [], [[atom_to_binary(Version)]]};
 component_field(version, Version) -> {version, [], [[Version]]};
 component_field(author, Author) -> {author, [], [[string:join(Author, ",")]]};
 component_field(description, Description) -> {description, [], [[Description]]};
