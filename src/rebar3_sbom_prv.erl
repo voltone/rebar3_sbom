@@ -92,6 +92,17 @@ dep_info(Name, _Version, {git, Git, {tag, Tag}}, _Dir, Details, Deps) ->
         {dependencies, Deps}
     ];
 
+dep_info(Name, Version, {git, Git, {branch, Branch}}, _Dir, Details, Deps) ->
+    [
+        {name, Name},
+        {version, Version},
+        {author, proplists:get_value(maintainers, Details)},
+        {description, proplists:get_value(description, Details)},
+        {licenses, proplists:get_value(licenses, Details)},
+        {purl, rebar3_sbom_purl:git(Name, Git, Branch)},
+        {dependencies, Deps}
+    ];
+
 dep_info(Name, Version, {git, Git, {ref, Ref}}, _Dir, Details, Deps) ->
     [
         {name, Name},
@@ -102,6 +113,9 @@ dep_info(Name, Version, {git, Git, {ref, Ref}}, _Dir, Details, Deps) ->
         {purl, rebar3_sbom_purl:git(Name, Git, Ref)},
         {dependencies, Deps}
     ];
+
+dep_info(Name, Version, {git_subdir, Git, Ref, Dir}, _Dir, Details, Deps) ->
+    dep_info(Name, Version, {git, Git, Ref}, Dir, Details, Deps);
 
 dep_info(_Name, _Version, _Source, _Dir, _Details, _Deps) ->
     undefined.
