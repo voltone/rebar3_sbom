@@ -45,7 +45,7 @@ bitbucket(Repo, Ref) ->
 
 purl(PathSegments, Version) ->
     Path = lists:join("/", [escape(Segment) || Segment <- PathSegments]),
-    io_lib:format("pkg:~s@~s", [Path, escape(Version)]).
+    unicode:characters_to_binary(io_lib:format("pkg:~s@~s", [Path, escape(Version)])).
 
 -if(?OTP_RELEASE >= 25).
 

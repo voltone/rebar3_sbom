@@ -79,27 +79,21 @@ dep_info(_Name, _Version, {pkg, Name, Version, _InnerChecksum, OuterChecksum, _R
         {sha256, string:lowercase(OuterChecksum)}
     | Common ];
 
-dep_info(Name, _Version, {git, Git, {tag, Tag}}, Common) ->
+dep_info(Name, DepVersion, {git, Git, GitRef}, Common) ->
+    {Version, Purl} =
+        case GitRef of
+            {tag, Tag} ->
+                {Tag, rebar3_sbom_purl:git(Name, Git, Tag)};
+            {branch, Branch} ->
+                {DepVersion, rebar3_sbom_purl:git(Name, Git, Branch)};
+            {ref, Ref} ->
+                {DepVersion, rebar3_sbom_purl:git(Name, Git, Ref)}
+        end,
     [
-        {name, Name},
-        {version, Tag},
-        {purl, rebar3_sbom_purl:git(Name, Git, Tag)}
-    | Common ];
-
-dep_info(Name, Version, {git, Git, {branch, Branch}}, Common) ->
-    [
-        {name, Name},
-        {version, Version},
-        {purl, rebar3_sbom_purl:git(Name, Git, Branch)}
-    | Common ];
-
-dep_info(Name, Version, {git, Git, {ref, Ref}}, Common) ->
-    [
-        {name, Name},
-        {version, Version},
-        {purl, rebar3_sbom_purl:git(Name, Git, Ref)}
-    | Common ];
-
+     {name, Name},
+     {version, Version},
+     {purl, Purl}
+    | maybe_update_licenses(Purl, Common) ];
 dep_info(Name, Version, {git_subdir, Git, Ref, _Dir}, Common) ->
     dep_info(Name, Version, {git, Git, Ref}, Common);
 
@@ -122,4 +116,55 @@ write_file(Filename, Xml, false) ->
             end;
         Error ->
             Error
+    end.
+
+maybe_update_licenses(Purl, Common) ->
+    case proplists:get_value(licenses, Common) of
+        [_|_] ->
+            %% Non-empty list, ok
+            Common;
+        _ ->
+            %% [] or 'undefined'
+            case Purl of
+                <<"pkg:github/", GithubPurlString/binary>> ->
+                    case get_github_license(GithubPurlString) of
+                        {ok, SPDX_Id} ->
+                            lists:keyreplace(licenses, 1, Common,
+                                             {licenses, [SPDX_Id]});
+                        _ ->
+                            Common
+                    end;
+                _ ->
+                    Common
+            end
+    end.
+
+get_github_license(String) ->
+    case re:split(String, <<"[/@]">>) of
+        [Org, Repo, _Ref] ->
+            get_github_license(Org, Repo);
+        _ ->
+            {error, string}
+    end.
+
+get_github_license(Org, Repo) ->
+    URI =
+        #{ scheme => <<"https">>,
+           path => filename:join([<<"/repos">>, Org, Repo, <<"license">>]),
+           host => <<"api.github.com">>
+         },
+    URIStr = uri_string:recompose(URI),
+    Headers = #{<<"user-agent">> => <<"rebar3">>},
+    case
+        rebar_httpc_adapter:request(get, URIStr, Headers, undefined, #{})
+    of
+        {ok, {200, _ReplyHeaders, Body}} ->
+            case jsone:decode(Body) of
+                #{<<"license">> := #{<<"spdx_id">> := SPDX_Id}} ->
+                    {ok, SPDX_Id};
+                _ ->
+                    {error, body}
+            end;
+        _ ->
+            {error, request}
     end.
