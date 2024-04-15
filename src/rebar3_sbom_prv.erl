@@ -52,72 +52,58 @@ dep_info(Dep) ->
     Name = rebar_app_info:name(Dep),
     Version = rebar_app_info:original_vsn(Dep),
     Source = rebar_app_info:source(Dep),
-    Dir = rebar_app_info:dir(Dep),
     Details = rebar_app_info:app_details(Dep),
     Deps = rebar_app_info:deps(Dep),
-    dep_info(Name, Version, Source, Dir, Details, Deps).
+    Common =
+        [
+         {author, proplists:get_value(maintainers, Details)},
+         {description, proplists:get_value(description, Details)},
+         {licenses, proplists:get_value(licenses, Details)},
+         {dependencies, Deps}
+        ],
+    dep_info(Name, Version, Source, Common).
 
-dep_info(_Name, _Version, {pkg, Name, Version, Sha256}, _Dir, Details, Deps) ->
+dep_info(_Name, _Version, {pkg, Name, Version, Sha256}, Common) ->
     [
         {name, Name},
         {version, Version},
-        {author, proplists:get_value(maintainers, Details)},
-        {description, proplists:get_value(description, Details)},
-        {licenses, proplists:get_value(licenses, Details)},
         {purl, rebar3_sbom_purl:hex(Name, Version)},
-        {sha256, string:lowercase(Sha256)},
-        {dependencies, Deps}
-    ];
+        {sha256, string:lowercase(Sha256)}
+    | Common ];
 
-dep_info(_Name, _Version, {pkg, Name, Version, _InnerChecksum, OuterChecksum, _RepoConfig}, _Dir, Details, Deps) ->
+dep_info(_Name, _Version, {pkg, Name, Version, _InnerChecksum, OuterChecksum, _RepoConfig}, Common) ->
     [
         {name, Name},
         {version, Version},
-        {author, proplists:get_value(maintainers, Details)},
-        {description, proplists:get_value(description, Details)},
-        {licenses, proplists:get_value(licenses, Details)},
         {purl, rebar3_sbom_purl:hex(Name, Version)},
-        {sha256, string:lowercase(OuterChecksum)},
-        {dependencies, Deps}
-    ];
+        {sha256, string:lowercase(OuterChecksum)}
+    | Common ];
 
-dep_info(Name, _Version, {git, Git, {tag, Tag}}, _Dir, Details, Deps) ->
+dep_info(Name, _Version, {git, Git, {tag, Tag}}, Common) ->
     [
         {name, Name},
         {version, Tag},
-        {author, proplists:get_value(maintainers, Details)},
-        {description, proplists:get_value(description, Details)},
-        {licenses, proplists:get_value(licenses, Details)},
-        {purl, rebar3_sbom_purl:git(Name, Git, Tag)},
-        {dependencies, Deps}
-    ];
+        {purl, rebar3_sbom_purl:git(Name, Git, Tag)}
+    | Common ];
 
-dep_info(Name, Version, {git, Git, {branch, Branch}}, _Dir, Details, Deps) ->
+dep_info(Name, Version, {git, Git, {branch, Branch}}, Common) ->
     [
         {name, Name},
         {version, Version},
-        {author, proplists:get_value(maintainers, Details)},
-        {description, proplists:get_value(description, Details)},
-        {licenses, proplists:get_value(licenses, Details)},
-        {purl, rebar3_sbom_purl:git(Name, Git, Branch)},
-        {dependencies, Deps}
-    ];
+        {purl, rebar3_sbom_purl:git(Name, Git, Branch)}
+    | Common ];
 
-dep_info(Name, Version, {git, Git, {ref, Ref}}, _Dir, Details, Deps) ->
+dep_info(Name, Version, {git, Git, {ref, Ref}}, Common) ->
     [
         {name, Name},
         {version, Version},
-        {author, proplists:get_value(maintainers, Details)},
-        {description, proplists:get_value(description, Details)},
-        {licenses, proplists:get_value(licenses, Details)},
-        {purl, rebar3_sbom_purl:git(Name, Git, Ref)},
-        {dependencies, Deps}
-    ];
+        {purl, rebar3_sbom_purl:git(Name, Git, Ref)}
+    | Common ];
 
-dep_info(Name, Version, {git_subdir, Git, Ref, Dir}, _Dir, Details, Deps) ->
-    dep_info(Name, Version, {git, Git, Ref}, Dir, Details, Deps);
+dep_info(Name, Version, {git_subdir, Git, Ref, _Dir}, Common) ->
+    dep_info(Name, Version, {git, Git, Ref}, Common);
 
-dep_info(_Name, _Version, _Source, _Dir, _Details, _Deps) ->
+dep_info(_Name, _Version, _Source, _Common) ->
     undefined.
 
 write_file(Filename, Xml, true) ->
