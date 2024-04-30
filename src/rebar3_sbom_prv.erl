@@ -52,58 +52,52 @@ dep_info(Dep) ->
     Name = rebar_app_info:name(Dep),
     Version = rebar_app_info:original_vsn(Dep),
     Source = rebar_app_info:source(Dep),
-    Dir = rebar_app_info:dir(Dep),
     Details = rebar_app_info:app_details(Dep),
     Deps = rebar_app_info:deps(Dep),
-    dep_info(Name, Version, Source, Dir, Details, Deps).
+    Common =
+        [
+         {author, proplists:get_value(maintainers, Details)},
+         {description, proplists:get_value(description, Details)},
+         {licenses, proplists:get_value(licenses, Details)},
+         {dependencies, Deps}
+        ],
+    dep_info(Name, Version, Source, Common).
 
-dep_info(_Name, _Version, {pkg, Name, Version, Sha256}, _Dir, Details, Deps) ->
+dep_info(_Name, _Version, {pkg, Name, Version, Sha256}, Common) ->
     [
         {name, Name},
         {version, Version},
-        {author, proplists:get_value(maintainers, Details)},
-        {description, proplists:get_value(description, Details)},
-        {licenses, proplists:get_value(licenses, Details)},
         {purl, rebar3_sbom_purl:hex(Name, Version)},
-        {sha256, string:lowercase(Sha256)},
-        {dependencies, Deps}
-    ];
+        {sha256, string:lowercase(Sha256)}
+    | Common ];
 
-dep_info(_Name, _Version, {pkg, Name, Version, _InnerChecksum, OuterChecksum, _RepoConfig}, _Dir, Details, Deps) ->
+dep_info(_Name, _Version, {pkg, Name, Version, _InnerChecksum, OuterChecksum, _RepoConfig}, Common) ->
     [
         {name, Name},
         {version, Version},
-        {author, proplists:get_value(maintainers, Details)},
-        {description, proplists:get_value(description, Details)},
-        {licenses, proplists:get_value(licenses, Details)},
         {purl, rebar3_sbom_purl:hex(Name, Version)},
-        {sha256, string:lowercase(OuterChecksum)},
-        {dependencies, Deps}
-    ];
+        {sha256, string:lowercase(OuterChecksum)}
+    | Common ];
 
-dep_info(Name, _Version, {git, Git, {tag, Tag}}, _Dir, Details, Deps) ->
+dep_info(Name, DepVersion, {git, Git, GitRef}, Common) ->
+    {Version, Purl} =
+        case GitRef of
+            {tag, Tag} ->
+                {Tag, rebar3_sbom_purl:git(Name, Git, Tag)};
+            {branch, Branch} ->
+                {DepVersion, rebar3_sbom_purl:git(Name, Git, Branch)};
+            {ref, Ref} ->
+                {DepVersion, rebar3_sbom_purl:git(Name, Git, Ref)}
+        end,
     [
-        {name, Name},
-        {version, Tag},
-        {author, proplists:get_value(maintainers, Details)},
-        {description, proplists:get_value(description, Details)},
-        {licenses, proplists:get_value(licenses, Details)},
-        {purl, rebar3_sbom_purl:git(Name, Git, Tag)},
-        {dependencies, Deps}
-    ];
+     {name, Name},
+     {version, Version},
+     {purl, Purl}
+    | maybe_update_licenses(Purl, Common) ];
+dep_info(Name, Version, {git_subdir, Git, Ref, _Dir}, Common) ->
+    dep_info(Name, Version, {git, Git, Ref}, Common);
 
-dep_info(Name, Version, {git, Git, {ref, Ref}}, _Dir, Details, Deps) ->
-    [
-        {name, Name},
-        {version, Version},
-        {author, proplists:get_value(maintainers, Details)},
-        {description, proplists:get_value(description, Details)},
-        {licenses, proplists:get_value(licenses, Details)},
-        {purl, rebar3_sbom_purl:git(Name, Git, Ref)},
-        {dependencies, Deps}
-    ];
-
-dep_info(_Name, _Version, _Source, _Dir, _Details, _Deps) ->
+dep_info(_Name, _Version, _Source, _Common) ->
     undefined.
 
 write_file(Filename, Xml, true) ->
@@ -122,4 +116,55 @@ write_file(Filename, Xml, false) ->
             end;
         Error ->
             Error
+    end.
+
+maybe_update_licenses(Purl, Common) ->
+    case proplists:get_value(licenses, Common) of
+        [_|_] ->
+            %% Non-empty list, ok
+            Common;
+        _ ->
+            %% [] or 'undefined'
+            case Purl of
+                <<"pkg:github/", GithubPurlString/binary>> ->
+                    case get_github_license(GithubPurlString) of
+                        {ok, SPDX_Id} ->
+                            lists:keyreplace(licenses, 1, Common,
+                                             {licenses, [SPDX_Id]});
+                        _ ->
+                            Common
+                    end;
+                _ ->
+                    Common
+            end
+    end.
+
+get_github_license(String) ->
+    case re:split(String, <<"[/@]">>) of
+        [Org, Repo, _Ref] ->
+            get_github_license(Org, Repo);
+        _ ->
+            {error, string}
+    end.
+
+get_github_license(Org, Repo) ->
+    URI =
+        #{ scheme => <<"https">>,
+           path => filename:join([<<"/repos">>, Org, Repo, <<"license">>]),
+           host => <<"api.github.com">>
+         },
+    URIStr = uri_string:recompose(URI),
+    Headers = #{<<"user-agent">> => <<"rebar3">>},
+    case
+        rebar_httpc_adapter:request(get, URIStr, Headers, undefined, #{})
+    of
+        {ok, {200, _ReplyHeaders, Body}} ->
+            case jsone:decode(Body) of
+                #{<<"license">> := #{<<"spdx_id">> := SPDX_Id}} ->
+                    {ok, SPDX_Id};
+                _ ->
+                    {error, body}
+            end;
+        _ ->
+            {error, request}
     end.
