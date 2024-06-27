@@ -54,14 +54,33 @@ dep_info(Dep) ->
     Source = rebar_app_info:source(Dep),
     Details = rebar_app_info:app_details(Dep),
     Deps = rebar_app_info:deps(Dep),
+    Licenses0 = proplists:get_value(licenses, Details, []),
+    HexMetadataLicenses = hex_metadata_licenses(Dep),
+    % remove duplicates, if any
+    Licenses = lists:usort(Licenses0 ++ HexMetadataLicenses),
     Common =
         [
          {author, proplists:get_value(maintainers, Details)},
          {description, proplists:get_value(description, Details)},
-         {licenses, proplists:get_value(licenses, Details)},
+         {licenses, Licenses},
          {dependencies, Deps}
         ],
     dep_info(Name, Version, Source, Common).
+
+hex_metadata_licenses(Dep) ->
+    DepDir = rebar_app_info:dir(Dep),
+    % hardcoded in rebar3, too
+    HexMetadataFile = "hex_metadata.config",
+    HexMetadataPath = filename:join(DepDir, HexMetadataFile),
+
+    case filelib:is_regular(HexMetadataPath) of
+        true ->
+            {ok, Terms} = file:consult(HexMetadataPath),
+            HexMetadataLicenses = proplists:get_value(<<"licenses">>, Terms, []),
+            [binary_to_list(HexMetadataLicense) || HexMetadataLicense <- HexMetadataLicenses];
+        false ->
+            []
+    end.
 
 dep_info(_Name, _Version, {pkg, Name, Version, Sha256}, Common) ->
     [
