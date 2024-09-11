@@ -16,6 +16,7 @@ init(State) ->
             {deps, ?DEPS},                % The list of dependencies
             {example, "rebar3 sbom"},     % How to use the plugin
             {opts, [                      % list of options understood by the plugin
+              {format, $F, "format", {string, "xml"}, "file format, [xml|json]"},
               {output, $o, "output", {string, ?DEFAULT_OUTPUT}, "the full path to the SBoM output file"},
               {force, $f, "force", {boolean, false}, "overwite existing files without prompting for confirmation"},
               {strict_version, $V, "strict_version", {boolean, true}, "modify the version number of the bom only when the content changes"}
@@ -28,17 +29,22 @@ init(State) ->
 -spec do(rebar_state:t()) -> {ok, rebar_state:t()} | {error, string()}.
 do(State) ->
     {Args, _} = rebar_state:command_parsed_args(State),
+    Format = proplists:get_value(format, Args),
     Output = proplists:get_value(output, Args),
     Force = proplists:get_value(force, Args),
     IsStrictVersion = proplists:get_value(strict_version, Args),
 
+    FilePath = filepath(Output, Format),
     Deps = rebar_state:all_deps(State),
     DepsInfo = [dep_info(Dep) || Dep <- Deps],
-    SBOM = rebar3_sbom_cyclonedx:bom(Output, IsStrictVersion, DepsInfo),
-    Xml = rebar3_sbom_xml:encode(SBOM),
-    case write_file(Output, Xml, Force) of
+    SBOM = rebar3_sbom_cyclonedx:bom({FilePath, Format}, IsStrictVersion, DepsInfo),
+    Contents = case Format of
+        "xml" -> rebar3_sbom_xml:encode(SBOM);
+        "json" -> rebar3_sbom_json:encode(SBOM)
+    end,
+    case write_file(FilePath, Contents, Force) of
         ok ->
-            rebar_api:info("CycloneDX SBoM written to ~s", [Output]),
+            rebar_api:info("CycloneDX SBoM written to ~s", [FilePath]),
             {ok, State};
         {error, Message} ->
             {error, {?MODULE, Message}}
@@ -119,8 +125,13 @@ dep_info(Name, Version, {git_subdir, Git, Ref, _Dir}, Common) ->
 dep_info(_Name, _Version, _Source, _Common) ->
     undefined.
 
-write_file(Filename, Xml, true) ->
-    file:write_file(Filename, Xml);
+filepath(?DEFAULT_OUTPUT, Format) ->
+    "./bom." ++ Format;
+filepath(Path, _Format) ->
+    Path.
+
+write_file(Filename, Contents, true) ->
+    file:write_file(Filename, Contents);
 
 write_file(Filename, Xml, false) ->
     case file:read_file_info(Filename) of

@@ -4,10 +4,10 @@
 
 -include("rebar3_sbom.hrl").
 
-bom(File, IsStrictVersion, RawComponents) ->
-    bom(File, IsStrictVersion, RawComponents, uuid()).
+bom(FileInfo, IsStrictVersion, RawComponents) ->
+    bom(FileInfo, IsStrictVersion, RawComponents, uuid()).
 
-bom(File, IsStrictVersion, RawComponents, Serial) ->
+bom({FilePath, _} = FileInfo, IsStrictVersion, RawComponents, Serial) ->
     ValidRawComponents = lists:filter(fun(E) -> E =/= undefined end, RawComponents),
     SBoM = #sbom{
         serial = Serial,
@@ -16,11 +16,11 @@ bom(File, IsStrictVersion, RawComponents, Serial) ->
         dependencies = dependencies(ValidRawComponents)
     },
     try
-        V = version(File, IsStrictVersion, SBoM),
+        V = version(FileInfo, IsStrictVersion, SBoM),
         SBoM#sbom{version = V}
     catch _:Reason ->
         logger:error("scan file:~ts failed, reason:~p, will use the default version number ~p",
-                     [File, Reason, ?DEFAULT_VERSION]),
+                     [FilePath, Reason, ?DEFAULT_VERSION]),
         SBoM
     end.
 
@@ -108,10 +108,10 @@ bom_ref_of_component(RawComponent) ->
     Name = proplists:get_value(name, RawComponent),
     lists:flatten(io_lib:format("ref_component_~ts", [Name])).
 
-version(File, IsStrictVersion, NewSbom) ->
-    case filelib:is_regular(File) of
+version({FilePath, Format}, IsStrictVersion, NewSbom) ->
+    case filelib:is_regular(FilePath) of
         true ->
-            OldSbom = rebar3_sbom_xml:decode(File),
+            OldSbom = decode(FilePath, Format),
             version(IsStrictVersion, {NewSbom, OldSbom});
         false ->
             ?DEFAULT_VERSION
@@ -127,11 +127,18 @@ version(IsStrictVersion, {_, OldSbom}) when IsStrictVersion =:= false ->
     OldSbom#sbom.version + 1;
 version(IsStrictVersion, {NewSbom, OldSbom}) when IsStrictVersion =:= true ->
     case is_sbom_equal(NewSbom, OldSbom) of
-        true  -> OldSbom#sbom.version;
-        false -> OldSbom#sbom.version + 1
+        true ->
+            OldSbom#sbom.version;
+        false ->
+            OldSbom#sbom.version + 1
     end.
 
 is_sbom_equal(#sbom{components = NewComponents}, #sbom{components = OldComponents}) ->
     lists:all(fun(C) -> lists:member(C, NewComponents) end, OldComponents)
     andalso
     lists:all(fun(C) -> lists:member(C, OldComponents) end, NewComponents).
+
+decode(FilePath, "xml") ->
+    rebar3_sbom_xml:decode(FilePath);
+decode(FilePath, "json") ->
+    rebar3_sbom_json:decode(FilePath).

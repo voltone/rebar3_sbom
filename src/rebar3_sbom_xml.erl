@@ -13,9 +13,9 @@ encode(SBOM) ->
     Content = sbom_to_xml(SBOM),
     xmerl:export_simple([Content], xmerl_xml).
 
-% Note: This sets the SBOM version to 0 if the xml file
-% does not have a valid version.
 decode(FilePath) ->
+    % Note: This sets the SBOM version to 0 if the xml file
+    %       does not have a valid version.
     {SBoM, _} = xmerl_scan:file(FilePath),
     Version = xml_to_bom_version(SBoM, 0),
     Components = [
@@ -23,6 +23,7 @@ decode(FilePath) ->
     ],
     #sbom{version = Version, components = Components}.
 
+% Encode -----------------------------------------------------------------------
 xml_to_bom_version(Xml, Default) ->
     case xpath("/bom/@version", Xml) of
         [Attr] ->
@@ -93,6 +94,7 @@ dependency_to_xml(Dependency) ->
         [dependency_to_xml(D) || D <- Dependency#dependency.dependencies]
     }.
 
+% Decode -----------------------------------------------------------------------
 xml_to_component(Component) ->
     [#xmlAttribute{value = Type}] = xpath("/component/@type", Component),
     [#xmlAttribute{value = BomRef}] = xpath("/component/@bom-ref", Component),

@@ -1,5 +1,5 @@
 -define(APP, "rebar3_sbom").
--define(DEFAULT_OUTPUT, "./bom.xml").
+-define(DEFAULT_OUTPUT, "./bom.[xml|json]").
 -define(DEFAULT_VERSION, 1).
 -define(PROVIDER, sbom).
 -define(DEPS, [lock]).
