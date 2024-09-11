@@ -2,10 +2,7 @@
 
 -export([init/1, do/1, format_error/1]).
 
--define(PROVIDER, sbom).
--define(DEPS, [lock]).
-
--define(OUTPUT, "bom.xml").
+-include("rebar3_sbom.hrl").
 
 %% ===================================================================
 %% Public API
@@ -19,7 +16,7 @@ init(State) ->
             {deps, ?DEPS},                % The list of dependencies
             {example, "rebar3 sbom"},     % How to use the plugin
             {opts, [                      % list of options understood by the plugin
-              {output, $o, "output", {string, ?OUTPUT}, "the full path to the SBoM output file"},
+              {output, $o, "output", {string, ?DEFAULT_OUTPUT}, "the full path to the SBoM output file"},
               {force, $f, "force", {boolean, false}, "overwite existing files without prompting for confirmation"},
               {strict_version, $V, "strict_version", {boolean, true}, "modify the version number of the bom only when the content changes"}
             ]},
@@ -33,9 +30,12 @@ do(State) ->
     {Args, _} = rebar_state:command_parsed_args(State),
     Output = proplists:get_value(output, Args),
     Force = proplists:get_value(force, Args),
+    IsStrictVersion = proplists:get_value(strict_version, Args),
+
     Deps = rebar_state:all_deps(State),
     DepsInfo = [dep_info(Dep) || Dep <- Deps],
-    Xml = rebar3_sbom_cyclonedx:bom(Output, DepsInfo, Args),
+    SBOM = rebar3_sbom_cyclonedx:bom(Output, IsStrictVersion, DepsInfo),
+    Xml = rebar3_sbom_xml:encode(SBOM),
     case write_file(Output, Xml, Force) of
         ok ->
             rebar_api:info("CycloneDX SBoM written to ~s", [Output]),
@@ -44,7 +44,7 @@ do(State) ->
             {error, {?MODULE, Message}}
     end.
 
--spec format_error(any()) ->  iolist().
+-spec format_error(any()) -> iolist().
 format_error(Message) ->
     io_lib:format("~s", [Message]).
 
