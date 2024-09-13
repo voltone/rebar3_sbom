@@ -114,6 +114,10 @@ version({FilePath, Format}, IsStrictVersion, NewSbom) ->
             OldSbom = decode(FilePath, Format),
             version(IsStrictVersion, {NewSbom, OldSbom});
         false ->
+            rebar_api:info(
+                "Using default SBOM version ~p: no previous SBOM file found.",
+                [?DEFAULT_VERSION]
+            ),
             ?DEFAULT_VERSION
     end.
 
@@ -122,14 +126,27 @@ version({FilePath, Format}, IsStrictVersion, NewSbom) ->
     NewSbom :: #sbom{}, OldSbom :: #sbom{},
     Version :: integer().
 version(_, {_, OldSbom}) when OldSbom#sbom.version =:= 0 ->
+    rebar_api:info(
+        "Using default SBOM version ~p: invalid version in previous SBOM file.",
+        [?DEFAULT_VERSION]
+    ),
     ?DEFAULT_VERSION;
 version(IsStrictVersion, {_, OldSbom}) when IsStrictVersion =:= false ->
+    rebar_api:info(
+        "Incrementing the SBOM version unconditionally: strict_version is set to false.", []
+    ),
     OldSbom#sbom.version + 1;
 version(IsStrictVersion, {NewSbom, OldSbom}) when IsStrictVersion =:= true ->
     case is_sbom_equal(NewSbom, OldSbom) of
         true ->
+            rebar_api:info(
+                "Not incrementing the SBOM version: new SBOM is equivalent to the old SBOM.", []
+            ),
             OldSbom#sbom.version;
         false ->
+            rebar_api:info(
+                "Incrementing the SBOM version: new SBOM is not equivalent to the old SBOM.", []
+            ),
             OldSbom#sbom.version + 1
     end.
 
