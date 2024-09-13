@@ -2,119 +2,160 @@
 
 -export([bom/3, bom/4, uuid/0]).
 
--define(APP, "rebar3_sbom").
--define(DEFAULT_VERSION, "1").
--define(COMPONENT_FIELDS, [name, version, author, description, licenses, purl, sha256]).
+-include("rebar3_sbom.hrl").
 
--include_lib("xmerl/include/xmerl.hrl").
+bom(FileInfo, IsStrictVersion, RawComponents) ->
+    bom(FileInfo, IsStrictVersion, RawComponents, uuid()).
 
-bom(File, Components, Opts) ->
-    bom(File, Components, Opts, uuid()).
-
-bom(File, Components, Opts, Serial) ->
-    ValidComponents = lists:filter(fun(E) -> E =/= undefined end, Components),
-    Content = {bom, [{version, ?DEFAULT_VERSION},
-                     {serialNumber, Serial},
-                     {xmlns, "http://cyclonedx.org/schema/bom/1.4"}],
-               [{metadata, metadata()},
-                {components, [], [component(Component) || Component <- ValidComponents]},
-                {dependencies, [], [dependency(Component) || Component <- ValidComponents]}]},
-    Normalized = xmerl_lib:normalize_element(Content),
-    Bom = update_version(File, Normalized, Opts),
-    xmerl:export_simple([Bom], xmerl_xml).
+bom({FilePath, _} = FileInfo, IsStrictVersion, RawComponents, Serial) ->
+    ValidRawComponents = lists:filter(fun(E) -> E =/= undefined end, RawComponents),
+    SBoM = #sbom{
+        serial = Serial,
+        metadata = metadata(),
+        components = components(ValidRawComponents),
+        dependencies = dependencies(ValidRawComponents)
+    },
+    try
+        V = version(FileInfo, IsStrictVersion, SBoM),
+        SBoM#sbom{version = V}
+    catch _:Reason ->
+        logger:error("scan file:~ts failed, reason:~p, will use the default version number ~p",
+                     [FilePath, Reason, ?DEFAULT_VERSION]),
+        SBoM
+    end.
 
 metadata() ->
-    [{timestamp, [calendar:system_time_to_rfc3339(erlang:system_time(second))]},
-     {tools, [{tool, [{name, [?APP]}]}]}
-    ].
+    #metadata{
+        timestamp = calendar:system_time_to_rfc3339(erlang:system_time(second)),
+        tools = [?APP]
+    }.
 
-component(Component) ->
-    {component, [{type, "library"}, {'bom-ref', bom_ref_of_component(Component)}],
-        [component_field(Field, Value)
-         || {Field, Value} <- Component,
-            lists:member(Field, ?COMPONENT_FIELDS), Value /= undefined, Value /= []]}.
+components(RawComponents) ->
+    [component(RawComponent) || RawComponent <- RawComponents].
 
-component_field(name, Name) -> {name, [], [[Name]]};
-component_field(version, Version) -> {version, [], [[Version]]};
-component_field(author, Author) -> {author, [], [[string:join(Author, ",")]]};
-component_field(description, Description) -> {description, [], [[Description]]};
-component_field(licenses, Licenses) -> {licenses, [], [license(License) || License <- Licenses]};
-component_field(purl, Purl) -> {purl, [], [[Purl]]};
-component_field(sha256, Sha256) ->
-    {hashes, [], [
-        {hash, [{alg, "SHA-256"}], [[Sha256]]}
-    ]}.
+component(RawComponent) ->
+    #component{
+        bom_ref = bom_ref_of_component(RawComponent),
+        name = component_field(name, RawComponent),
+        author = component_field(author, RawComponent),
+        version = component_field(version, RawComponent),
+        description = component_field(description, RawComponent),
+        hashes = component_field(sha256, RawComponent),
+        licenses = component_field(licenses, RawComponent),
+        purl = component_field(purl, RawComponent)
+    }.
+
+component_field(author = Field, RawComponent) ->
+    case proplists:get_value(Field, RawComponent) of
+        undefined ->
+            undefined;
+        Value ->
+            string:join(Value, ",")
+    end;
+component_field(licenses = Field, RawComponent) ->
+    case proplists:get_value(Field, RawComponent) of
+        undefined ->
+            undefined;
+        Licenses ->
+            [license(License) || License <- Licenses]
+    end;
+component_field(sha256 = Field, RawComponent) ->
+    case proplists:get_value(Field, RawComponent) of
+        undefined ->
+            undefined;
+        Hash ->
+            [#{alg => "SHA-256", hash => binary:bin_to_list(Hash)}]
+    end;
+component_field(Field, RawComponent) ->
+    case proplists:get_value(Field, RawComponent) of
+        Value when is_binary(Value) ->
+            binary:bin_to_list(Value);
+        Else ->
+            Else
+    end.
 
 license(Name) ->
     case rebar3_sbom_license:spdx_id(Name) of
         undefined ->
-            {license, [], [{name, [], [[Name]]}]};
+            #{name => Name};
         SpdxId ->
-            {license, [], [{id, [], [[SpdxId]]}]}
+            #{id => SpdxId}
     end.
 
 uuid() ->
     [A, B, C, D, E] = [crypto:strong_rand_bytes(Len) || Len <- [4, 2, 2, 2, 6]],
-    lists:join("-", [hex(Part) || Part <- [A, B, <<4:4, C:12/binary-unit:1>>, <<2:2, D:14/binary-unit:1>>, E]]).
+    UUID = lists:join("-", [hex(Part) || Part <- [A, B, <<4:4, C:12/binary-unit:1>>, <<2:2, D:14/binary-unit:1>>, E]]),
+    "urn:uuid:" ++ UUID.
 
 hex(Bin) ->
     string:lowercase(<< <<Hex>> || <<Nibble:4>> <= Bin, Hex <- integer_to_list(Nibble,16) >>).
 
-update_version(File, #xmlElement{attributes = Attrs} = Bom, Opts) ->
-    Version = get_version(File, Bom, Opts),
-    Attr = lists:keyfind(version, #xmlAttribute.name, Attrs),
-    NewAttr = Attr#xmlAttribute{value = Version},
-    NewAttrs = lists:keyreplace(version, #xmlAttribute.name, Attrs, NewAttr),
-    Bom#xmlElement{attributes = NewAttrs}.
+dependencies(undefined) ->
+    [];
+dependencies(RawComponents) ->
+    [dependency(RawComponent) || RawComponent <- RawComponents].
 
-get_version(File, Bom, Opts) ->
-    try
-        case xmerl_scan:file(File) of
-            {#xmlElement{attributes = Attrs} = Old, _} ->
-                case lists:keyfind(version, #xmlAttribute.name, Attrs) of
-                    false ->
-                        ?DEFAULT_VERSION;
-                    #xmlAttribute{value = Value} ->
-                        case is_strict_version(Opts) andalso is_bom_equal(Old, Bom) of
-                            true ->
-                                Value;
-                            _ ->
-                                Version = erlang:list_to_integer(Value),
-                                erlang:integer_to_list(Version + 1)
-                        end
-                end;
-            {error, enoent} ->
-                ?DEFAULT_VERSION
-        end
-    catch _:Reason ->
-            logger:error("scan file:~ts failed, reason:~p, will use the default version number 1",
-                         [File, Reason]),
+dependency(RawComponent) ->
+    RawDependencies = proplists:get_value(dependencies, RawComponent, []),
+    #dependency{
+        ref = bom_ref_of_component(RawComponent),
+        dependencies = [
+            dependency([{name, D}]) || D <- RawDependencies
+        ]
+    }.
+
+bom_ref_of_component(RawComponent) ->
+    Name = proplists:get_value(name, RawComponent),
+    lists:flatten(io_lib:format("ref_component_~ts", [Name])).
+
+version({FilePath, Format}, IsStrictVersion, NewSBoM) ->
+    case filelib:is_regular(FilePath) of
+        true ->
+            OldSBoM = decode(FilePath, Format),
+            version(IsStrictVersion, {NewSBoM, OldSBoM});
+        false ->
+            rebar_api:info(
+                "Using default SBoM version ~p: no previous SBoM file found.",
+                [?DEFAULT_VERSION]
+            ),
             ?DEFAULT_VERSION
     end.
 
-is_strict_version(Opts) ->
-    proplists:get_value(strict_version, Opts, true).
+-spec version(IsStrictVersion, {NewSBoM, OldSBoM}) -> Version when
+    IsStrictVersion :: boolean(),
+    NewSBoM :: #sbom{}, OldSBoM :: #sbom{},
+    Version :: integer().
+version(_, {_, OldSBoM}) when OldSBoM#sbom.version =:= 0 ->
+    rebar_api:info(
+        "Using default SBoM version ~p: invalid version in previous SBoM file.",
+        [?DEFAULT_VERSION]
+    ),
+    ?DEFAULT_VERSION;
+version(IsStrictVersion, {_, OldSBoM}) when IsStrictVersion =:= false ->
+    rebar_api:info(
+        "Incrementing the SBoM version unconditionally: strict_version is set to false.", []
+    ),
+    OldSBoM#sbom.version + 1;
+version(IsStrictVersion, {NewSBoM, OldSBoM}) when IsStrictVersion =:= true ->
+    case is_sbom_equal(NewSBoM, OldSBoM) of
+        true ->
+            rebar_api:info(
+                "Not incrementing the SBoM version: new SBoM is equivalent to the old SBoM.", []
+            ),
+            OldSBoM#sbom.version;
+        false ->
+            rebar_api:info(
+                "Incrementing the SBoM version: new SBoM is not equivalent to the old SBoM.", []
+            ),
+            OldSBoM#sbom.version + 1
+    end.
 
-is_bom_equal(#xmlElement{content = A}, #xmlElement{content = B}) ->
-    lists:all(fun(Key) ->
-                      ValA = lists:keyfind(Key, #xmlElement.name, A),
-                      ValB = lists:keyfind(Key, #xmlElement.name, B),
-                      case {ValA, ValB} of
-                          {false, false} -> true;
-                          {false, _} -> false;
-                          {_, false} -> false;
-                          {_, _} ->
-                              xmerl_lib:simplify_element(ValA) =:=
-                                  xmerl_lib:simplify_element(ValB)
-                      end
-              end,
-              [components]).
+is_sbom_equal(#sbom{components = NewComponents}, #sbom{components = OldComponents}) ->
+    lists:all(fun(C) -> lists:member(C, NewComponents) end, OldComponents)
+    andalso
+    lists:all(fun(C) -> lists:member(C, OldComponents) end, NewComponents).
 
-dependency(Component) ->
-    Ref = bom_ref_of_component(Component),
-    Deps = proplists:get_value(dependencies, Component, []),
-    {dependency, [{ref, [Ref]}], [dependency([{name, Dep}]) || Dep <- Deps]}.
-
-bom_ref_of_component(Component) ->
-    Name = proplists:get_value(name, Component),
-    lists:flatten(io_lib:format("ref_component_~ts", [Name])).
+decode(FilePath, "xml") ->
+    rebar3_sbom_xml:decode(FilePath);
+decode(FilePath, "json") ->
+    rebar3_sbom_json:decode(FilePath).

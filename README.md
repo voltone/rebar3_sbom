@@ -19,9 +19,12 @@ Then run the 'sbom' task on a project:
 
 The following command line options are supported:
 
-    -o, --output  the full path to the SBoM output file [default: bom.xml]
+    -F, --format  the file format of the SBoM output, [xml|json], [default: xml]
+    -o, --output  the full path to the SBoM output file [default: ./bom.[xml|json]]
     -f, --force   overwite existing files without prompting for confirmation
                   [default: false]
+    -V, --strict_version modify the version number of the bom only when the content changes
+                  [default: true]
 
 By default only dependencies in the 'default' profile are included. To
 generate an SBoM covering development environments specify the relevant
