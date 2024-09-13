@@ -108,46 +108,46 @@ bom_ref_of_component(RawComponent) ->
     Name = proplists:get_value(name, RawComponent),
     lists:flatten(io_lib:format("ref_component_~ts", [Name])).
 
-version({FilePath, Format}, IsStrictVersion, NewSbom) ->
+version({FilePath, Format}, IsStrictVersion, NewSBoM) ->
     case filelib:is_regular(FilePath) of
         true ->
-            OldSbom = decode(FilePath, Format),
-            version(IsStrictVersion, {NewSbom, OldSbom});
+            OldSBoM = decode(FilePath, Format),
+            version(IsStrictVersion, {NewSBoM, OldSBoM});
         false ->
             rebar_api:info(
-                "Using default SBOM version ~p: no previous SBOM file found.",
+                "Using default SBoM version ~p: no previous SBoM file found.",
                 [?DEFAULT_VERSION]
             ),
             ?DEFAULT_VERSION
     end.
 
--spec version(IsStrictVersion, {NewSbom, OldSbom}) -> Version when
+-spec version(IsStrictVersion, {NewSBoM, OldSBoM}) -> Version when
     IsStrictVersion :: boolean(),
-    NewSbom :: #sbom{}, OldSbom :: #sbom{},
+    NewSBoM :: #sbom{}, OldSBoM :: #sbom{},
     Version :: integer().
-version(_, {_, OldSbom}) when OldSbom#sbom.version =:= 0 ->
+version(_, {_, OldSBoM}) when OldSBoM#sbom.version =:= 0 ->
     rebar_api:info(
-        "Using default SBOM version ~p: invalid version in previous SBOM file.",
+        "Using default SBoM version ~p: invalid version in previous SBoM file.",
         [?DEFAULT_VERSION]
     ),
     ?DEFAULT_VERSION;
-version(IsStrictVersion, {_, OldSbom}) when IsStrictVersion =:= false ->
+version(IsStrictVersion, {_, OldSBoM}) when IsStrictVersion =:= false ->
     rebar_api:info(
-        "Incrementing the SBOM version unconditionally: strict_version is set to false.", []
+        "Incrementing the SBoM version unconditionally: strict_version is set to false.", []
     ),
-    OldSbom#sbom.version + 1;
-version(IsStrictVersion, {NewSbom, OldSbom}) when IsStrictVersion =:= true ->
-    case is_sbom_equal(NewSbom, OldSbom) of
+    OldSBoM#sbom.version + 1;
+version(IsStrictVersion, {NewSBoM, OldSBoM}) when IsStrictVersion =:= true ->
+    case is_sbom_equal(NewSBoM, OldSBoM) of
         true ->
             rebar_api:info(
-                "Not incrementing the SBOM version: new SBOM is equivalent to the old SBOM.", []
+                "Not incrementing the SBoM version: new SBoM is equivalent to the old SBoM.", []
             ),
-            OldSbom#sbom.version;
+            OldSBoM#sbom.version;
         false ->
             rebar_api:info(
-                "Incrementing the SBOM version: new SBOM is not equivalent to the old SBOM.", []
+                "Incrementing the SBoM version: new SBoM is not equivalent to the old SBoM.", []
             ),
-            OldSbom#sbom.version + 1
+            OldSBoM#sbom.version + 1
     end.
 
 is_sbom_equal(#sbom{components = NewComponents}, #sbom{components = OldComponents}) ->

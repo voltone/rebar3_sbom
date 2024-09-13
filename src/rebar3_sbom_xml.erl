@@ -9,12 +9,12 @@
 -define(XMLNS_XSI, "http://www.w3.org/2001/XMLSchema-instance").
 -define(XSI_SCHEMA_LOC, "http://cyclonedx.org/schema/bom/1.4 https://cyclonedx.org/schema/bom-1.4.xsd").
 
-encode(SBOM) ->
-    Content = sbom_to_xml(SBOM),
+encode(SBoM) ->
+    Content = sbom_to_xml(SBoM),
     xmerl:export_simple([Content], xmerl_xml).
 
 decode(FilePath) ->
-    % Note: This sets the SBOM version to 0 if the xml file
+    % Note: This sets the SBoM version to 0 if the xml file
     %       does not have a valid version.
     {SBoM, _} = xmerl_scan:file(FilePath),
     Version = xml_to_bom_version(SBoM, 0),
@@ -32,14 +32,14 @@ xml_to_bom_version(Xml, Default) ->
             Default
     end.
 
-sbom_to_xml(#sbom{metadata = Metadata} = SBOM) ->
+sbom_to_xml(#sbom{metadata = Metadata} = SBoM) ->
     {
         bom, [
             {xmlns, ?XMLNS},
             {'xmlns:xsi', ?XMLNS_XSI},
             {'xsi:schemaLocation', ?XSI_SCHEMA_LOC},
-            {version, SBOM#sbom.version},
-            {serialNumber, SBOM#sbom.serial}
+            {version, SBoM#sbom.version},
+            {serialNumber, SBoM#sbom.serial}
         ],
         [
             {metadata, [
@@ -48,8 +48,8 @@ sbom_to_xml(#sbom{metadata = Metadata} = SBOM) ->
                     [tool_to_xml(Tool) || Tool <- Metadata#metadata.tools]
                 }
             ]},
-            {components, [component_to_xml(C) || C <- SBOM#sbom.components]},
-            {dependencies, [dependency_to_xml(D) || D <- SBOM#sbom.dependencies]}
+            {components, [component_to_xml(C) || C <- SBoM#sbom.components]},
+            {dependencies, [dependency_to_xml(D) || D <- SBoM#sbom.dependencies]}
         ]
     }.
 

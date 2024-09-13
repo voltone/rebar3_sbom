@@ -37,10 +37,10 @@ do(State) ->
     FilePath = filepath(Output, Format),
     Deps = rebar_state:all_deps(State),
     DepsInfo = [dep_info(Dep) || Dep <- Deps],
-    SBOM = rebar3_sbom_cyclonedx:bom({FilePath, Format}, IsStrictVersion, DepsInfo),
+    SBoM = rebar3_sbom_cyclonedx:bom({FilePath, Format}, IsStrictVersion, DepsInfo),
     Contents = case Format of
-        "xml" -> rebar3_sbom_xml:encode(SBOM);
-        "json" -> rebar3_sbom_json:encode(SBOM)
+        "xml" -> rebar3_sbom_xml:encode(SBoM);
+        "json" -> rebar3_sbom_json:encode(SBoM)
     end,
     case write_file(FilePath, Contents, Force) of
         ok ->

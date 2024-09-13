@@ -12,7 +12,7 @@ encode(SBoM) ->
     jsone:encode(Content, [native_forward_slash, native_utf8, canonical_form]).
 
 decode(FilePath) ->
-    % Note: This sets the SBOM version to 0 if the json file
+    % Note: This sets the SBoM version to 0 if the json file
     %       does not have a valid version.
     {ok, File} = file:read_file(FilePath),
     JsonTerm = jsone:decode(File),
@@ -21,19 +21,19 @@ decode(FilePath) ->
     #sbom{version = Version, components = Components}.
 
 % Encode -----------------------------------------------------------------------
-sbom_to_json(#sbom{metadata = Metadata} = SBOM) ->
+sbom_to_json(#sbom{metadata = Metadata} = SBoM) ->
     #{
         '$schema' => ?SCHEMA,
-        bomFormat => bin(SBOM#sbom.format),
+        bomFormat => bin(SBoM#sbom.format),
         specVersion => ?SPEC_VERSION,
-        serialNumber => bin(SBOM#sbom.serial),
-        version => SBOM#sbom.version,
+        serialNumber => bin(SBoM#sbom.serial),
+        version => SBoM#sbom.version,
         metadata => #{
             timestamp => bin(Metadata#metadata.timestamp),
             tools => [#{name => bin(T)} || T <- Metadata#metadata.tools]
         },
-        components => [component_to_json(C) || C <- SBOM#sbom.components],
-        dependencies => [dependency_to_json(D) || D <- SBOM#sbom.dependencies]
+        components => [component_to_json(C) || C <- SBoM#sbom.components],
+        dependencies => [dependency_to_json(D) || D <- SBoM#sbom.dependencies]
     }.
 
 component_to_json(C) ->
